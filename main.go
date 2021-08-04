@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -20,8 +23,8 @@ type ExecCredential struct {
 	} `json:"status"`
 }
 
-func run() (string, error) {
-	cmd := exec.Command("aws", os.Args[1:]...)
+func run(args []string) (string, error) {
+	cmd := exec.Command("aws", args...)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -32,9 +35,7 @@ func run() (string, error) {
 	return stdout.String(), nil
 }
 
-var cacheFile = os.Getenv("HOME") + "/.aws/eks-iam-cache.json"
-
-func readCache() (string, error) {
+func readCache(cacheFile string) (string, error) {
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
 		return "", err
@@ -53,25 +54,40 @@ func readCache() (string, error) {
 	return string(data), nil
 }
 
-func writeCache(token string) error {
+func writeCache(cacheFile string, token string) error {
 	return os.WriteFile(cacheFile, []byte(token), 0600)
 }
 
+func cacheFile(args, environ []string) string {
+	var hashKeys []string
+	for _, env := range environ {
+		if strings.HasPrefix(env, "AWS_") {
+			hashKeys = append(hashKeys, env)
+		}
+	}
+	sort.Strings(hashKeys)
+	hashKeys = append(hashKeys, args...)
+	hash := sha256.Sum256([]byte(strings.Join(hashKeys, "\x00")))
+	return fmt.Sprintf("%s/.aws/eks-iam-cache-%x.json", os.Getenv("HOME"), hash)
+}
+
 func main() {
-	cached, err := readCache()
+	args := os.Args[1:]
+	cache := cacheFile(args, os.Environ())
+	cached, err := readCache(cache)
 	if err == nil {
 		fmt.Print(cached)
 		return
 	}
 	fmt.Fprintln(os.Stderr, err)
 
-	token, err := run()
+	token, err := run(args)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println(token)
-	if err := writeCache(token); err != nil {
+	if err := writeCache(cache, token); err != nil {
 		panic(err)
 	}
 }
