@@ -6,6 +6,11 @@ go install github.com/chlunde/eks-iam-cache@main
 ```
 
 ## Configure `~/.kube/config`
+```bash
+sed -i 's/command: aws/command: eks-iam-cache/' ~/.kube/config
+```
+or edit `$KUBECONFIG`:
+
 ```yaml
 apiVersion: v1
 kind: Config
