@@ -83,7 +83,16 @@ func main() {
 
 	token, err := run(args)
 	if err != nil {
-		panic(err)
+		if err != nil {
+			_, err := run([]string{"sso", "login"})
+			if err != nil {
+				panic(err)
+			}
+		}
+		token, err = run(args)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	fmt.Println(token)
