@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -24,15 +23,18 @@ type ExecCredential struct {
 }
 
 func run(args []string) (string, error) {
-	cmd := exec.Command("aws", args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	err := cmd.Run()
+	name := "aws"
+	out, err := exec.Command(name, args...).Output()
 	if err != nil {
-		return "", err
+		switch err.(type) {
+		case *exec.ExitError:
+			e := err.(*exec.ExitError).Stderr
+			return "", fmt.Errorf("%s %s [%s]\n%s", name, strings.Join(args, " "), err.Error(), e)
+		default:
+			return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+		}
 	}
-	return stdout.String(), nil
+	return string(out), nil
 }
 
 func readCache(cacheFile string) (string, error) {
@@ -83,7 +85,7 @@ func main() {
 
 	token, err := run(args)
 	if err != nil {
-		if err != nil {
+		if err != nil { // TODO always true, noe jeg ikke ser?
 			_, err := run([]string{"sso", "login"})
 			if err != nil {
 				panic(err)
